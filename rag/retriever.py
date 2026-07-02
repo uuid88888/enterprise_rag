@@ -44,7 +44,13 @@ def _get_reranker():
                     _reranker = CrossEncoder(settings.rerank_model, local_files_only=True)
                 except Exception:
                     logger.info("本地无缓存，联网下载 Rerank 模型...")
-                    _reranker = CrossEncoder(settings.rerank_model)
+                    try:
+                        _reranker = CrossEncoder(settings.rerank_model)
+                    except Exception as exc:
+                        raise RuntimeError(
+                            f"Rerank 模型加载失败：{settings.rerank_model}。"
+                            "请确认网络可访问 HuggingFace/HF 镜像，或提前下载模型到本地缓存。"
+                        ) from exc
     return _reranker
 
 

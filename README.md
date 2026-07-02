@@ -1,6 +1,6 @@
 # 企业私有知识库问答平台
 
-基于 **FastAPI + Gradio + LangChain + LangGraph** 的本地企业 RAG 问答系统。当前版本定位为轻量可运行版：支持多格式文档入库、可选视觉 OCR、Chroma 向量存储、BGE Embedding、BM25 混合检索、BGE Reranker 重排、普通 RAG 与 Agent 两种问答模式。
+基于 **FastAPI + Gradio + LangChain + LangGraph** 的本地企业 RAG 问答系统。当前版本为 **v1.1-lite**，定位是轻量可运行、可演示、可逐步扩展：支持多格式文档入库、可选视觉 OCR、Chroma 向量存储、BGE Embedding、BM25 混合检索、BGE Reranker 重排、普通 RAG 与 Agent 两种问答模式。
 
 > 当前项目已经切换为项目内 `.venv`，Python 版本为 3.10。推荐使用 `run_venv.ps1` 启动。
 
@@ -10,7 +10,7 @@
 
 | 模块 | 已支持能力 | 说明 |
 |---|---|---|
-| 文档入库 | 批量上传、解析、清洗、分块、去重、增量 upsert | 分块默认为 `CHUNK_SIZE=800`、`CHUNK_OVERLAP=150`，当前是字符递归分块，不是 jtokkit token 分块 |
+| 文档入库 | 批量上传、解析、清洗、分块、去重、增量 upsert | 分块默认为 `CHUNK_SIZE=800`、`CHUNK_OVERLAP=150`，支持 `CHUNK_STRATEGY=char/token` |
 | 文件格式 | PDF、TXT、MD、CSV、JSON/JSONL、XML、HTML、DOC/DOCX、XLS/XLSX、PPT/PPTX、RTF、ODT/ODS/ODP、EPUB、图片 | 老版 `.doc/.xls/.ppt` 依赖 Windows + 本机 Microsoft Office |
 | 图片 OCR | 可选接入 OpenAI 兼容视觉模型 | 默认关闭；开启后支持 `jpg/png/gif/bmp/webp/tiff` 等图片 OCR |
 | 扫描版 PDF OCR | 可选接入视觉 OCR | PDF 先尝试提取文本层，文本过少且开启 OCR 时，用 PyMuPDF 渲染页面再 OCR |
@@ -26,7 +26,23 @@
 | 知识库管理 | 文档列表、按来源删除、清空向量库 | UI 和 API 均支持 |
 | API | FastAPI REST 接口 + Swagger 文档 | `/docs` 查看接口文档 |
 | UI | Gradio 管理页 + 问答页 | 支持上传进度、参数调节、来源片段展示 |
-| 自检 | `selftest.py` | 无需 LLM API Key，验证入库、混合检索、RRF、Rerank 链路 |
+| 配置兼容 | OpenAI / DeepSeek / DashScope Key 兼容 | 支持 `OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、`DASHSCOPE_API_KEY`、`OCR_API_KEY`，并自动忽略占位 key |
+| 自检 | `selftest.py` / `eval_retrieval.py` / `ocr_selftest.py` | 可分别验证检索通路、检索质量和 OCR 配置 |
+
+---
+
+## v1.1 新增优化
+
+| 能力 | 说明 |
+|---|---|
+| API Key 自动选择 | 根据 `OPENAI_BASE_URL` 自动优先选择 DeepSeek 或 DashScope Key；没有专用 Key 时再回退到通用 `OPENAI_API_KEY` |
+| 占位 Key 保护 | `sk-your-key-here`、`your-api-key` 等示例值不会被当作真实 Key 发起请求 |
+| OCR Key 兜底 | OCR 优先使用 `OCR_API_KEY`，其次使用 `DASHSCOPE_API_KEY`，最后回退 `OPENAI_API_KEY` |
+| 分块策略抽象 | 新增 `rag/chunking.py`，支持 `CHUNK_STRATEGY=char/token` |
+| 轻量 token 分块 | 不新增依赖，用中文单字、英文约 4 字符的方式估算 token，适合作为精确 tokenizer 前的过渡方案 |
+| OCR 自检 | 新增 `ocr_selftest.py`，可只检查配置，也可传入图片真实调用 OCR |
+| 检索评测 | 新增 `eval_retrieval.py` 和 `eval/questions.jsonl`，用于评估 Top-K 来源命中和关键词命中 |
+| 模型加载提示 | Embedding/Rerank 模型缺失或下载失败时，返回更清晰的中文错误提示 |
 
 ---
 
@@ -39,7 +55,7 @@
 | Apache Tika 文档解析 | 未接入；当前使用 Python 内置/第三方库和部分 Office COM 解析 |
 | DashScope Embedding | 未接入；当前是本地 BGE Embedding |
 | Milvus 向量库 | 未接入；当前是 Chroma |
-| jtokkit token 分块 | 未接入；当前是 RecursiveCharacterTextSplitter 字符分块 |
+| jtokkit 精确 token 分块 | 未接入；当前支持递归字符分块和轻量 token 估算分块 |
 | MySQL 问答日志 | 未接入 |
 | Redis 答案缓存 | 未接入 |
 | Redis/IP 限流 | 未接入 |
@@ -52,31 +68,31 @@
 ## 架构概览
 
 ```mermaid
-flowchart LR
-    U["用户 / API 客户端"] --> A["FastAPI 路由层"]
-    U --> G["Gradio 可视化界面"]
-    G --> A
+graph LR
+    user["用户或 API 客户端"] --> api["FastAPI 路由层"]
+    user --> ui["Gradio 可视化界面"]
+    ui --> api
 
-    A --> I["文档入库服务"]
-    I --> L["Document Loader<br/>多格式解析 / OCR / 清洗 / 分块 / 去重"]
-    L --> E["BGE Embedding"]
-    E --> C["Chroma 向量库"]
+    api --> ingest["文档入库服务"]
+    ingest --> loader["多格式解析、OCR、清洗、分块、去重"]
+    loader --> embed["BGE Embedding"]
+    embed --> chroma["Chroma 向量库"]
 
-    A --> Q["问答服务"]
-    Q --> P["PII 脱敏"]
-    P --> R["Hybrid Retriever"]
-    R --> C
-    R --> B["BM25 + jieba"]
-    R --> F["RRF 融合"]
-    F --> X["BGE Reranker"]
-    X --> M["参考片段"]
+    api --> qa["问答服务"]
+    qa --> pii["PII 脱敏"]
+    pii --> retriever["Hybrid Retriever"]
+    retriever --> chroma
+    retriever --> bm25["BM25 jieba"]
+    retriever --> rrf["RRF 融合"]
+    rrf --> rerank["BGE Reranker"]
+    rerank --> context["参考片段"]
 
-    Q --> S{"模式"}
-    S --> SR["普通 RAG"]
-    S --> AG["LangGraph Agent<br/>决策 / 拆解 / 检索 / 反思 / 生成"]
-    SR --> LLM["OpenAI 兼容大模型"]
-    AG --> LLM
-    LLM --> O["答案 + 来源片段"]
+    qa --> rag["普通 RAG"]
+    qa --> agent["LangGraph Agent"]
+    rag --> llm["OpenAI 兼容大模型"]
+    agent --> llm
+    context --> llm
+    llm --> answer["答案和来源片段"]
 ```
 
 ---
@@ -88,10 +104,14 @@ enterprise_rag/
 ├── main.py                 # FastAPI 应用入口，挂载 Gradio
 ├── run_venv.ps1            # 使用项目 .venv 启动
 ├── selftest.py             # 无需 API Key 的检索链路自检
+├── eval_retrieval.py       # 检索质量评测脚本
+├── ocr_selftest.py         # OCR 配置检查/可选实测脚本
 ├── requirements.txt        # Python 依赖
 ├── .env.example            # 配置模板
 ├── api/
 │   └── routes.py           # API 路由与 UI 共用服务函数
+├── eval/
+│   └── questions.jsonl     # 检索评测用例
 ├── agent/
 │   ├── agent_graph.py      # 普通 RAG、HyDE、LangGraph Agent
 │   ├── graph_state.py      # Agent 状态定义
@@ -101,6 +121,7 @@ enterprise_rag/
 │   ├── retry_middleware.py # 工具/模型调用重试
 │   └── summary_middleware.py # 长对话摘要压缩
 ├── rag/
+│   ├── chunking.py         # char/token 分块策略
 │   ├── document_loader.py  # 多格式解析、OCR 调度、分块、去重
 │   ├── retriever.py        # 向量 + BM25 + RRF + Rerank
 │   ├── vector_store.py     # Chroma + BGE Embedding
@@ -155,6 +176,8 @@ $env:CHROMA_DIR = "./data/chroma310"
 ```ini
 # 大模型，兼容 OpenAI 格式，可配置 OpenAI / DeepSeek / 本地模型服务
 OPENAI_API_KEY=sk-your-key-here
+DEEPSEEK_API_KEY=
+DASHSCOPE_API_KEY=
 OPENAI_BASE_URL=https://api.deepseek.com/v1
 LLM_MODEL=deepseek-chat
 LLM_TEMPERATURE=0.1
@@ -172,9 +195,18 @@ TOP_K=5
 SCORE_THRESHOLD=0.3
 ENABLE_HYDE=false
 ENABLE_PII=true
+CHUNK_STRATEGY=char
 CHUNK_SIZE=800
 CHUNK_OVERLAP=150
 ```
+
+Key 选择规则：
+
+- `OPENAI_BASE_URL` 包含 `deepseek` 时，优先使用 `DEEPSEEK_API_KEY`。
+- `OPENAI_BASE_URL` 包含 `dashscope` 或 `aliyuncs` 时，优先使用 `DASHSCOPE_API_KEY`。
+- 其他 OpenAI 兼容服务默认优先使用 `OPENAI_API_KEY`。
+- OCR 优先使用 `OCR_API_KEY`，其次使用 `DASHSCOPE_API_KEY`，最后使用 `OPENAI_API_KEY`。
+- 示例占位值不会被当作真实 Key 使用。
 
 ### OCR 配置
 
@@ -235,7 +267,31 @@ curl -X POST http://127.0.0.1:8000/api/ask \
 4. 执行向量检索 + BM25 + RRF + BGE Reranker。
 5. 输出每个测试问题的 Top-K 命中文档。
 
-完整问答链路需要配置可用的 `OPENAI_API_KEY`、`OPENAI_BASE_URL` 和 `LLM_MODEL`。
+完整问答链路需要配置可用的 `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` / `DASHSCOPE_API_KEY`、`OPENAI_BASE_URL` 和 `LLM_MODEL`。
+
+### OCR 配置自检
+
+默认只检查配置，不调用云端：
+
+```powershell
+.\.venv\Scripts\python.exe ocr_selftest.py
+```
+
+传入图片后会真实调用 OCR：
+
+```powershell
+.\.venv\Scripts\python.exe ocr_selftest.py --image path\to\image.png
+```
+
+### 检索质量评测
+
+评测前清空库并重新入库 `samples/`：
+
+```powershell
+.\.venv\Scripts\python.exe eval_retrieval.py --ingest-samples
+```
+
+用例在 `eval/questions.jsonl` 中维护，可持续补充真实业务问题。
 
 ---
 
@@ -247,7 +303,7 @@ curl -X POST http://127.0.0.1:8000/api/ask \
 | 可视化界面 | Gradio |
 | 编排 | LangGraph |
 | LLM 调用 | OpenAI 兼容接口 |
-| 文本分块 | LangChain RecursiveCharacterTextSplitter |
+| 文本分块 | RecursiveCharacterTextSplitter / 轻量 token 估算分块 |
 | Embedding | sentence-transformers + BGE small zh |
 | 向量库 | Chroma PersistentClient |
 | 关键词检索 | rank-bm25 + jieba |

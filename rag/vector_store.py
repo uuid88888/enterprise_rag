@@ -42,7 +42,13 @@ def _get_embedder():
                     )
                 except Exception:
                     logger.info("本地无缓存，联网下载 Embedding 模型...")
-                    _embedder = SentenceTransformer(settings.embedding_model)
+                    try:
+                        _embedder = SentenceTransformer(settings.embedding_model)
+                    except Exception as exc:
+                        raise RuntimeError(
+                            f"Embedding 模型加载失败：{settings.embedding_model}。"
+                            "请确认网络可访问 HuggingFace/HF 镜像，或提前下载模型到本地缓存。"
+                        ) from exc
     return _embedder
 
 

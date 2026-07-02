@@ -20,7 +20,12 @@ class QwenVLOCRProvider(OCRProvider):
     """OCR provider backed by an OpenAI-compatible vision model."""
 
     def __init__(self) -> None:
-        api_key = settings.ocr_api_key or settings.openai_api_key
+        api_key = settings.effective_ocr_api_key
+        if not api_key:
+            raise RuntimeError(
+                "未配置可用的 OCR API Key。请在 .env 中配置 OCR_API_KEY、"
+                "DASHSCOPE_API_KEY 或 OPENAI_API_KEY。"
+            )
         base_url = settings.ocr_base_url or settings.openai_base_url
         self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=120)
         self._model = settings.ocr_model
@@ -51,4 +56,3 @@ class QwenVLOCRProvider(OCRProvider):
         text = resp.choices[0].message.content or ""
         logger.info("OCR 调用完成，返回 %d 字符", len(text))
         return text.strip()
-

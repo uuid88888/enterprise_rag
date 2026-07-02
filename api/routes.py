@@ -219,10 +219,10 @@ async def ask(req: AskRequest) -> AskResponse:
 async def get_supported_types() -> dict:
     data = supported_types()
     data["chunking"] = {
-        "strategy": "recursive_character",
+        "strategy": settings.normalized_chunk_strategy,
         "chunk_size": settings.chunk_size,
         "chunk_overlap": settings.chunk_overlap,
-        "note": "当前按字符长度递归分块，不是严格 token 分块。",
+        "note": "char=递归字符分块；token=轻量 token 估算分块。",
     }
     data["vector_store"] = {
         "provider": "Chroma",

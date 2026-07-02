@@ -19,9 +19,9 @@ from html.parser import HTMLParser
 from typing import List
 from xml.etree import ElementTree as ET
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 
+from rag.chunking import split_text
 from utils.common import clean_text, get_logger, text_hash
 from utils.config import settings
 
@@ -53,6 +53,7 @@ def supported_types() -> dict:
             "pdf": "优先提取 PDF 内置文本；若文本过少且开启 OCR，则渲染页面走视觉 OCR。",
             "legacy_office": ".doc/.xls/.ppt 依赖 Windows + 已安装 Microsoft Office。",
             "ocr": "图片与扫描 PDF OCR 默认关闭，需配置 ENABLE_OCR=true 与 OCR provider。",
+            "chunking": "CHUNK_STRATEGY=char 使用递归字符分块；CHUNK_STRATEGY=token 使用轻量 token 估算分块。",
         },
     }
 
@@ -503,13 +504,13 @@ def load_file(
         logger.warning("文件无有效文本内容：%s", filename)
         return []
 
-    splitter = RecursiveCharacterTextSplitter(
+    pieces = split_text(
+        text,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
+        strategy=settings.normalized_chunk_strategy,
         separators=_SEPARATORS,
-        keep_separator=True,
     )
-    pieces = splitter.split_text(text)
 
     chunks = [
         Chunk(text=piece.strip(), source=filename, chunk_index=i)

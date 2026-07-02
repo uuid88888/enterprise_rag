@@ -27,10 +27,16 @@ def get_llm() -> ChatOpenAI:
     if _llm is None:
         with _lock:
             if _llm is None:
+                api_key = settings.effective_llm_api_key
+                if not api_key:
+                    raise RuntimeError(
+                        "未配置可用的大模型 API Key。请在 .env 中配置 OPENAI_API_KEY、"
+                        "DEEPSEEK_API_KEY 或 DASHSCOPE_API_KEY。"
+                    )
                 _llm = ChatOpenAI(
                     model=settings.llm_model,
                     temperature=settings.llm_temperature,
-                    api_key=settings.openai_api_key,
+                    api_key=api_key,
                     base_url=settings.openai_base_url,
                     timeout=60,
                 )

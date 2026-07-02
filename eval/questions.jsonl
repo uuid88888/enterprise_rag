@@ -1,0 +1,4 @@
+{"question":"公司的报销流程是怎样的？","expected_sources":["公司员工手册.txt"],"expected_keywords":["报销"]}
+{"question":"年假有几天？","expected_sources":["公司员工手册.txt"],"expected_keywords":["年假"]}
+{"question":"误删的文件还能恢复吗？","expected_sources":["产品常见问题FAQ.txt"],"expected_keywords":["恢复"]}
+{"question":"铂金会员有多少存储空间？","expected_sources":["产品常见问题FAQ.txt"],"expected_keywords":["铂金","存储空间"]}
