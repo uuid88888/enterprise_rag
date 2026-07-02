@@ -2,7 +2,6 @@
 
 基于 **FastAPI + Gradio + LangChain + LangGraph** 的本地企业 RAG 问答系统。当前版本为 **v1.1-lite**，定位是轻量可运行、可演示、可逐步扩展：支持多格式文档入库、可选视觉 OCR、Chroma 向量存储、BGE Embedding、BM25 混合检索、BGE Reranker 重排、普通 RAG 与 Agent 两种问答模式。
 
-> 当前项目已经切换为项目内 `.venv`，Python 版本为 3.10。推荐使用 `run_venv.ps1` 启动。
 
 ---
 
